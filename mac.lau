@@ -1,0 +1,1118 @@
+--==================================================
+-- CLEAN MACRO + FLY
+-- Camera Direction + Hover Fix
+--==================================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+--==================================================
+-- 기존 UI 제거
+--==================================================
+
+local oldGui = playerGui:FindFirstChild("CleanMacroFly")
+
+if oldGui then
+	oldGui:Destroy()
+end
+
+--==================================================
+-- 기본 설정
+--==================================================
+
+local uiToggleKey = Enum.KeyCode.RightShift
+local flyToggleKey = Enum.KeyCode.Y
+
+local waitingForUIToggleKey = false
+local waitingForFlyToggleKey = false
+
+local uiVisible = true
+
+local flyEnabled = false
+local flySpeed = 60
+
+--==================================================
+-- 매크로 키
+--==================================================
+
+local keys = {
+	{Name = "Z", KeyCode = Enum.KeyCode.Z, Enabled = false, HoldTime = 0.5},
+	{Name = "X", KeyCode = Enum.KeyCode.X, Enabled = false, HoldTime = 0.5},
+	{Name = "C", KeyCode = Enum.KeyCode.C, Enabled = false, HoldTime = 0.5},
+	{Name = "V", KeyCode = Enum.KeyCode.V, Enabled = false, HoldTime = 0.5},
+	{Name = "B", KeyCode = Enum.KeyCode.B, Enabled = false, HoldTime = 0.5},
+	{Name = "N", KeyCode = Enum.KeyCode.N, Enabled = false, HoldTime = 0.5},
+	{Name = "K", KeyCode = Enum.KeyCode.K, Enabled = false, HoldTime = 0.5}
+}
+
+--==================================================
+-- 색상
+--==================================================
+
+local C = {
+	Main = Color3.fromRGB(20, 22, 27),
+	Header = Color3.fromRGB(28, 31, 38),
+
+	Card = Color3.fromRGB(31, 34, 42),
+	Button = Color3.fromRGB(40, 44, 54),
+
+	Stroke = Color3.fromRGB(68, 74, 88),
+
+	Text = Color3.fromRGB(238, 240, 245),
+	Sub = Color3.fromRGB(150, 157, 172),
+
+	Blue = Color3.fromRGB(80, 150, 255),
+	Green = Color3.fromRGB(70, 205, 125),
+	Red = Color3.fromRGB(225, 90, 100),
+
+	Slider = Color3.fromRGB(65, 69, 80),
+	White = Color3.fromRGB(245, 245, 247)
+}
+
+--==================================================
+-- Helper
+--==================================================
+
+local function round(object, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius or 8)
+	corner.Parent = object
+	return corner
+end
+
+local function addStroke(object)
+	local s = Instance.new("UIStroke")
+
+	s.Color = C.Stroke
+	s.Transparency = 0.45
+	s.Thickness = 1
+
+	s.Parent = object
+
+	return s
+end
+
+local function makeLabel(parent, text, position, size, textSize)
+	local label = Instance.new("TextLabel")
+
+	label.Position = position
+	label.Size = size
+
+	label.BackgroundTransparency = 1
+
+	label.Text = text
+	label.TextColor3 = C.Sub
+
+	label.Font = Enum.Font.Gotham
+	label.TextSize = textSize or 12
+
+	label.TextXAlignment = Enum.TextXAlignment.Left
+
+	label.Parent = parent
+
+	return label
+end
+
+local function makeButton(parent, text, position, size)
+	local button = Instance.new("TextButton")
+
+	button.Position = position
+	button.Size = size
+
+	button.BackgroundColor3 = C.Button
+	button.BorderSizePixel = 0
+
+	button.Text = text
+	button.TextColor3 = C.Text
+
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 12
+
+	button.AutoButtonColor = true
+
+	button.Parent = parent
+
+	round(button, 7)
+
+	return button
+end
+
+--==================================================
+-- GUI
+--==================================================
+
+local gui = Instance.new("ScreenGui")
+
+gui.Name = "CleanMacroFly"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 9999
+
+gui.Parent = playerGui
+
+--==================================================
+-- MAIN
+--==================================================
+
+local main = Instance.new("Frame")
+
+main.Size = UDim2.fromOffset(300, 595)
+
+main.Position = UDim2.new(
+	1,
+	-320,
+	0.5,
+	-297
+)
+
+main.BackgroundColor3 = C.Main
+main.BorderSizePixel = 0
+
+main.Parent = gui
+
+round(main, 12)
+addStroke(main)
+
+--==================================================
+-- HEADER
+--==================================================
+
+local header = Instance.new("TextButton")
+
+header.Size = UDim2.new(
+	1,
+	0,
+	0,
+	46
+)
+
+header.BackgroundColor3 = C.Header
+header.BorderSizePixel = 0
+
+header.Text = "MACRO  /  FLY"
+
+header.TextColor3 = C.Text
+
+header.Font = Enum.Font.GothamBold
+header.TextSize = 14
+
+header.AutoButtonColor = false
+
+header.Parent = main
+
+round(header, 12)
+
+local headerFix = Instance.new("Frame")
+
+headerFix.Size = UDim2.new(
+	1,
+	0,
+	0,
+	12
+)
+
+headerFix.Position = UDim2.new(
+	0,
+	0,
+	1,
+	-12
+)
+
+headerFix.BackgroundColor3 = C.Header
+headerFix.BorderSizePixel = 0
+
+headerFix.Parent = header
+
+--==================================================
+-- UI TOGGLE KEY
+--==================================================
+
+local uiKeyButton = makeButton(
+	main,
+	"UI : RightShift",
+	UDim2.new(1, -132, 0, 9),
+	UDim2.fromOffset(118, 28)
+)
+
+uiKeyButton.TextSize = 10
+
+local function updateUIKeyButton()
+	if waitingForUIToggleKey then
+		uiKeyButton.Text = "PRESS KEY..."
+		uiKeyButton.TextColor3 = C.Blue
+	else
+		uiKeyButton.Text = "UI : " .. uiToggleKey.Name
+		uiKeyButton.TextColor3 = C.Text
+	end
+end
+
+uiKeyButton.MouseButton1Click:Connect(function()
+	if waitingForFlyToggleKey then
+		return
+	end
+
+	waitingForUIToggleKey = true
+	updateUIKeyButton()
+end)
+
+updateUIKeyButton()
+
+--==================================================
+-- UI DRAG
+--==================================================
+
+local dragging = false
+local dragStart
+local startPosition
+
+header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		dragging = true
+		dragStart = UserInputService:GetMouseLocation()
+		startPosition = main.Position
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if not dragging then
+		return
+	end
+
+	if input.UserInputType ~= Enum.UserInputType.MouseMovement
+		and input.UserInputType ~= Enum.UserInputType.Touch
+	then
+		return
+	end
+
+	local current = UserInputService:GetMouseLocation()
+	local delta = current - dragStart
+
+	main.Position = UDim2.new(
+		startPosition.X.Scale,
+		startPosition.X.Offset + delta.X,
+		startPosition.Y.Scale,
+		startPosition.Y.Offset + delta.Y
+	)
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		dragging = false
+	end
+end)
+
+--==================================================
+-- SLIDER SYSTEM
+--==================================================
+
+local activeSlider = nil
+
+local function createSlider(
+	parent,
+	position,
+	width,
+	minValue,
+	maxValue,
+	initialValue,
+	callback
+)
+
+	local slider = Instance.new("Frame")
+
+	slider.Position = position
+	slider.Size = UDim2.fromOffset(width, 6)
+
+	slider.BackgroundColor3 = C.Slider
+	slider.BorderSizePixel = 0
+
+	slider.Parent = parent
+
+	round(slider, 10)
+
+	local ratio = math.clamp(
+		(initialValue - minValue) / (maxValue - minValue),
+		0,
+		1
+	)
+
+	local fill = Instance.new("Frame")
+
+	fill.Size = UDim2.new(
+		ratio,
+		0,
+		1,
+		0
+	)
+
+	fill.BackgroundColor3 = C.Blue
+	fill.BorderSizePixel = 0
+
+	fill.Parent = slider
+
+	round(fill, 10)
+
+	local knob = Instance.new("TextButton")
+
+	knob.Size = UDim2.fromOffset(14, 14)
+
+	knob.Position = UDim2.new(
+		ratio,
+		-7,
+		0.5,
+		-7
+	)
+
+	knob.BackgroundColor3 = C.White
+	knob.BorderSizePixel = 0
+
+	knob.Text = ""
+	knob.AutoButtonColor = false
+
+	knob.Parent = slider
+
+	round(knob, 10)
+
+	local function update(x)
+		if slider.AbsoluteSize.X <= 0 then
+			return
+		end
+
+		local ratioValue = math.clamp(
+			(x - slider.AbsolutePosition.X)
+				/ slider.AbsoluteSize.X,
+			0,
+			1
+		)
+
+		fill.Size = UDim2.new(
+			ratioValue,
+			0,
+			1,
+			0
+		)
+
+		knob.Position = UDim2.new(
+			ratioValue,
+			-7,
+			0.5,
+			-7
+		)
+
+		local value =
+			minValue
+			+
+			(maxValue - minValue)
+			* ratioValue
+
+		callback(value)
+	end
+
+	local function start(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			activeSlider = update
+			update(input.Position.X)
+		end
+	end
+
+	knob.InputBegan:Connect(start)
+	slider.InputBegan:Connect(start)
+
+	return slider
+end
+
+UserInputService.InputChanged:Connect(function(input)
+	if not activeSlider then
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		activeSlider(input.Position.X)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+	then
+		activeSlider = nil
+	end
+end)
+
+--==================================================
+-- MACRO UI
+--==================================================
+
+local macroTitle = makeLabel(
+	main,
+	"SKILL MACRO",
+	UDim2.fromOffset(14, 58),
+	UDim2.fromOffset(270, 18),
+	11
+)
+
+macroTitle.Font = Enum.Font.GothamBold
+macroTitle.TextColor3 = C.Text
+
+local macroCard = Instance.new("Frame")
+
+macroCard.Size = UDim2.fromOffset(272, 330)
+macroCard.Position = UDim2.fromOffset(14, 80)
+
+macroCard.BackgroundColor3 = C.Card
+macroCard.BorderSizePixel = 0
+
+macroCard.Parent = main
+
+round(macroCard, 10)
+addStroke(macroCard)
+
+for index, keyData in ipairs(keys) do
+	local y =
+		12
+		+
+		(index - 1)
+		* 44
+
+	local button = makeButton(
+		macroCard,
+		keyData.Name .. "  OFF",
+		UDim2.fromOffset(10, y),
+		UDim2.fromOffset(70, 30)
+	)
+
+	button.TextColor3 = C.Red
+
+	local timeLabel = makeLabel(
+		macroCard,
+		"0.5s",
+		UDim2.fromOffset(88, y),
+		UDim2.fromOffset(42, 30),
+		11
+	)
+
+	button.MouseButton1Click:Connect(function()
+		keyData.Enabled = not keyData.Enabled
+
+		if keyData.Enabled then
+			button.Text = keyData.Name .. "  ON"
+			button.TextColor3 = C.Green
+
+			button.BackgroundColor3 =
+				Color3.fromRGB(
+					34,
+					65,
+					49
+				)
+		else
+			button.Text = keyData.Name .. "  OFF"
+			button.TextColor3 = C.Red
+			button.BackgroundColor3 = C.Button
+		end
+	end)
+
+	createSlider(
+		macroCard,
+		UDim2.fromOffset(133, y + 12),
+		126,
+		0.1,
+		3,
+		keyData.HoldTime,
+
+		function(value)
+			value =
+				math.floor(
+					value * 10
+					+ 0.5
+				)
+				/ 10
+
+			keyData.HoldTime = value
+
+			timeLabel.Text =
+				string.format(
+					"%.1fs",
+					value
+				)
+		end
+	)
+end
+
+--==================================================
+-- FLY UI
+--==================================================
+
+local flyTitle = makeLabel(
+	main,
+	"FLY",
+	UDim2.fromOffset(14, 424),
+	UDim2.fromOffset(270, 18),
+	11
+)
+
+flyTitle.Font = Enum.Font.GothamBold
+flyTitle.TextColor3 = C.Text
+
+local flyCard = Instance.new("Frame")
+
+flyCard.Size = UDim2.fromOffset(272, 130)
+flyCard.Position = UDim2.fromOffset(14, 446)
+
+flyCard.BackgroundColor3 = C.Card
+flyCard.BorderSizePixel = 0
+
+flyCard.Parent = main
+
+round(flyCard, 10)
+addStroke(flyCard)
+
+--==================================================
+-- FLY BUTTON
+--==================================================
+
+local flyButton = makeButton(
+	flyCard,
+	"FLY  OFF",
+	UDim2.fromOffset(10, 12),
+	UDim2.fromOffset(110, 34)
+)
+
+flyButton.TextColor3 = C.Red
+
+--==================================================
+-- FLY KEY
+--==================================================
+
+local flyKeyButton = makeButton(
+	flyCard,
+	"KEY : Y",
+	UDim2.fromOffset(130, 12),
+	UDim2.fromOffset(132, 34)
+)
+
+flyKeyButton.TextSize = 10
+
+local function updateFlyKeyButton()
+	if waitingForFlyToggleKey then
+		flyKeyButton.Text = "PRESS KEY..."
+		flyKeyButton.TextColor3 = C.Blue
+	else
+		flyKeyButton.Text = "KEY : " .. flyToggleKey.Name
+		flyKeyButton.TextColor3 = C.Text
+	end
+end
+
+flyKeyButton.MouseButton1Click:Connect(function()
+	if waitingForUIToggleKey then
+		return
+	end
+
+	waitingForFlyToggleKey = true
+	updateFlyKeyButton()
+end)
+
+updateFlyKeyButton()
+
+--==================================================
+-- FLY SPEED
+--==================================================
+
+local speedText = makeLabel(
+	flyCard,
+	"FLY SPEED",
+	UDim2.fromOffset(10, 58),
+	UDim2.fromOffset(120, 20),
+	10
+)
+
+speedText.Font = Enum.Font.GothamBold
+speedText.TextColor3 = C.Text
+
+local speedValue = makeLabel(
+	flyCard,
+	tostring(flySpeed),
+	UDim2.fromOffset(200, 58),
+	UDim2.fromOffset(62, 20),
+	11
+)
+
+speedValue.Font = Enum.Font.GothamBold
+speedValue.TextColor3 = C.Blue
+speedValue.TextXAlignment = Enum.TextXAlignment.Right
+
+createSlider(
+	flyCard,
+	UDim2.fromOffset(10, 88),
+	252,
+	10,
+	1000,
+	flySpeed,
+
+	function(value)
+		flySpeed =
+			math.floor(
+				value + 0.5
+			)
+
+		speedValue.Text =
+			tostring(
+				flySpeed
+			)
+	end
+)
+
+local flyInfo = makeLabel(
+	flyCard,
+	"CAMERA DIR • WASD • SPACE / LCTRL",
+	UDim2.fromOffset(10, 102),
+	UDim2.fromOffset(252, 20),
+	9
+)
+
+--==================================================
+-- CHARACTER
+--==================================================
+
+local character
+local humanoid
+local rootPart
+
+local flyAttachment
+local flyVelocity
+
+local function removeFlyPhysics()
+	if flyVelocity then
+		flyVelocity:Destroy()
+		flyVelocity = nil
+	end
+
+	if flyAttachment then
+		flyAttachment:Destroy()
+		flyAttachment = nil
+	end
+end
+
+local function setupCharacter(char)
+	removeFlyPhysics()
+
+	character = char
+
+	humanoid =
+		char:WaitForChild(
+			"Humanoid"
+		)
+
+	rootPart =
+		char:WaitForChild(
+			"HumanoidRootPart"
+		)
+
+	flyEnabled = false
+
+	flyButton.Text = "FLY  OFF"
+	flyButton.TextColor3 = C.Red
+	flyButton.BackgroundColor3 = C.Button
+end
+
+if player.Character then
+	task.spawn(
+		setupCharacter,
+		player.Character
+	)
+end
+
+player.CharacterAdded:Connect(
+	setupCharacter
+)
+
+--==================================================
+-- FLY PHYSICS
+--==================================================
+
+local function createFlyPhysics()
+	if not rootPart then
+		return
+	end
+
+	removeFlyPhysics()
+
+	flyAttachment =
+		Instance.new("Attachment")
+
+	flyAttachment.Name =
+		"CleanFlyAttachment"
+
+	flyAttachment.Parent =
+		rootPart
+
+	flyVelocity =
+		Instance.new("LinearVelocity")
+
+	flyVelocity.Name =
+		"CleanFlyVelocity"
+
+	flyVelocity.Attachment0 =
+		flyAttachment
+
+	flyVelocity.RelativeTo =
+		Enum.ActuatorRelativeTo.World
+
+	flyVelocity.VelocityConstraintMode =
+		Enum.VelocityConstraintMode.Vector
+
+	flyVelocity.VectorVelocity =
+		Vector3.zero
+
+	flyVelocity.MaxForce =
+		math.huge
+
+	flyVelocity.Parent =
+		rootPart
+end
+
+--==================================================
+-- FLY TOGGLE
+--==================================================
+
+local function toggleFly()
+	if not rootPart
+		or not rootPart.Parent
+	then
+		return
+	end
+
+	flyEnabled =
+		not flyEnabled
+
+	if flyEnabled then
+		createFlyPhysics()
+
+		flyButton.Text =
+			"FLY  ON"
+
+		flyButton.TextColor3 =
+			C.Green
+
+		flyButton.BackgroundColor3 =
+			Color3.fromRGB(
+				34,
+				65,
+				52
+			)
+
+	else
+		removeFlyPhysics()
+
+		flyButton.Text =
+			"FLY  OFF"
+
+		flyButton.TextColor3 =
+			C.Red
+
+		flyButton.BackgroundColor3 =
+			C.Button
+	end
+end
+
+flyButton.MouseButton1Click:Connect(
+	toggleFly
+)
+
+--==================================================
+-- MOVEMENT
+--==================================================
+
+local movement = {
+	W = false,
+	A = false,
+	S = false,
+	D = false,
+	Up = false,
+	Down = false
+}
+
+local function setMovement(
+	keyCode,
+	state
+)
+
+	if keyCode == Enum.KeyCode.W then
+		movement.W = state
+
+	elseif keyCode == Enum.KeyCode.S then
+		movement.S = state
+
+	elseif keyCode == Enum.KeyCode.A then
+		movement.A = state
+
+	elseif keyCode == Enum.KeyCode.D then
+		movement.D = state
+
+	elseif keyCode == Enum.KeyCode.Space then
+		movement.Up = state
+
+	elseif keyCode == Enum.KeyCode.LeftControl then
+		movement.Down = state
+	end
+end
+
+--==================================================
+-- INPUT
+--==================================================
+
+UserInputService.InputBegan:Connect(function(
+	input,
+	gameProcessed
+)
+
+	--------------------------------------------------
+	-- UI KEY CHANGE
+	--------------------------------------------------
+
+	if waitingForUIToggleKey then
+		if input.UserInputType
+			== Enum.UserInputType.Keyboard
+		then
+			if input.KeyCode
+				== Enum.KeyCode.Escape
+			then
+				waitingForUIToggleKey =
+					false
+
+				updateUIKeyButton()
+
+				return
+			end
+
+			if input.KeyCode
+				~= Enum.KeyCode.Unknown
+			then
+				uiToggleKey =
+					input.KeyCode
+
+				waitingForUIToggleKey =
+					false
+
+				updateUIKeyButton()
+
+				return
+			end
+		end
+
+		return
+	end
+
+	--------------------------------------------------
+	-- FLY KEY CHANGE
+	--------------------------------------------------
+
+	if waitingForFlyToggleKey then
+		if input.UserInputType
+			== Enum.UserInputType.Keyboard
+		then
+			if input.KeyCode
+				== Enum.KeyCode.Escape
+			then
+				waitingForFlyToggleKey =
+					false
+
+				updateFlyKeyButton()
+
+				return
+			end
+
+			if input.KeyCode
+				~= Enum.KeyCode.Unknown
+			then
+				flyToggleKey =
+					input.KeyCode
+
+				waitingForFlyToggleKey =
+					false
+
+				updateFlyKeyButton()
+
+				return
+			end
+		end
+
+		return
+	end
+
+	--------------------------------------------------
+	-- UI TOGGLE
+	--------------------------------------------------
+
+	if input.KeyCode == uiToggleKey then
+		uiVisible =
+			not uiVisible
+
+		main.Visible =
+			uiVisible
+
+		return
+	end
+
+	--------------------------------------------------
+	-- FLY TOGGLE
+	--------------------------------------------------
+
+	if input.KeyCode == flyToggleKey then
+		toggleFly()
+		return
+	end
+
+	--------------------------------------------------
+	-- MOVEMENT
+	--------------------------------------------------
+
+	if not gameProcessed then
+		setMovement(
+			input.KeyCode,
+			true
+		)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	setMovement(
+		input.KeyCode,
+		false
+	)
+end)
+
+--==================================================
+-- FLY UPDATE
+--
+-- LinearVelocity가 VectorVelocity = 0 을 유지하므로
+-- 아무 키도 안 누르면 중력으로 떨어지지 않음.
+--
+-- W/S는 카메라 LookVector 그대로 사용해서
+-- Y축까지 포함.
+--==================================================
+
+RunService.RenderStepped:Connect(function()
+	if not flyEnabled then
+		return
+	end
+
+	if not rootPart
+		or not rootPart.Parent
+		or not humanoid
+		or humanoid.Health <= 0
+	then
+		return
+	end
+
+	if not flyVelocity
+		or not flyVelocity.Parent
+	then
+		createFlyPhysics()
+	end
+
+	if not flyVelocity then
+		return
+	end
+
+	local camera =
+		workspace.CurrentCamera
+
+	if not camera then
+		return
+	end
+
+	local forward =
+		camera.CFrame.LookVector
+
+	local right =
+		camera.CFrame.RightVector
+
+	local direction =
+		Vector3.zero
+
+	-- 카메라가 보는 3D 방향 그대로
+	if movement.W then
+		direction += forward
+	end
+
+	if movement.S then
+		direction -= forward
+	end
+
+	-- 카메라 기준 좌우
+	if movement.D then
+		direction += right
+	end
+
+	if movement.A then
+		direction -= right
+	end
+
+	-- 수직 이동
+	if movement.Up then
+		direction += Vector3.yAxis
+	end
+
+	if movement.Down then
+		direction -= Vector3.yAxis
+	end
+
+	if direction.Magnitude > 0 then
+		flyVelocity.VectorVelocity =
+			direction.Unit
+			* flySpeed
+	else
+		-- ★ 핵심:
+		-- 아무 키도 안 누르면 속도 0을
+		-- 물리적으로 계속 유지해서 공중 정지
+		flyVelocity.VectorVelocity =
+			Vector3.zero
+	end
+end)
+
+--==================================================
+-- MACRO
+--==================================================
+
+task.spawn(function()
+	while true do
+		for _, keyData in ipairs(keys) do
+			if keyData.Enabled then
+
+				VirtualInputManager:SendKeyEvent(
+					true,
+					keyData.KeyCode,
+					false,
+					game
+				)
+
+				task.wait(
+					keyData.HoldTime
+				)
+
+				VirtualInputManager:SendKeyEvent(
+					false,
+					keyData.KeyCode,
+					false,
+					game
+				)
+
+				task.wait(0.06)
+			end
+		end
+
+		task.wait(0.15)
+	end
+end)
