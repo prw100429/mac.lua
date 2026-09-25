@@ -1,6 +1,5 @@
 --==================================================
--- CLEAN MACRO + FLY
--- Camera Direction + Hover Fix
+-- RESPONSIVE MACRO + FLY
 --==================================================
 
 local Players = game:GetService("Players")
@@ -12,7 +11,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 --==================================================
--- 기존 UI 제거
+-- 기존 GUI 제거
 --==================================================
 
 local oldGui = playerGui:FindFirstChild("CleanMacroFly")
@@ -37,7 +36,21 @@ local flyEnabled = false
 local flySpeed = 60
 
 --==================================================
--- 매크로 키
+-- 반응형 UI 설정
+--
+-- 화면이 작아질수록 자동 축소
+-- 화면이 커져도 기본 크기 이상으로는 커지지 않음
+--==================================================
+
+local MIN_UI_SCALE = 0.55
+local MAX_UI_SCALE = 1.00
+
+-- 이 화면 크기에서 UI가 100% 크기
+local REFERENCE_WIDTH = 1200
+local REFERENCE_HEIGHT = 760
+
+--==================================================
+-- 매크로
 --==================================================
 
 local keys = {
@@ -75,29 +88,40 @@ local C = {
 }
 
 --==================================================
--- Helper
+-- UI Helper
 --==================================================
 
 local function round(object, radius)
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, radius or 8)
+
+	corner.CornerRadius =
+		UDim.new(0, radius or 8)
+
 	corner.Parent = object
+
 	return corner
 end
 
 local function addStroke(object)
-	local s = Instance.new("UIStroke")
+	local stroke = Instance.new("UIStroke")
 
-	s.Color = C.Stroke
-	s.Transparency = 0.45
-	s.Thickness = 1
+	stroke.Color = C.Stroke
+	stroke.Transparency = 0.45
+	stroke.Thickness = 1
 
-	s.Parent = object
+	stroke.Parent = object
 
-	return s
+	return stroke
 end
 
-local function makeLabel(parent, text, position, size, textSize)
+local function makeLabel(
+	parent,
+	text,
+	position,
+	size,
+	textSize
+)
+
 	local label = Instance.new("TextLabel")
 
 	label.Position = position
@@ -111,14 +135,21 @@ local function makeLabel(parent, text, position, size, textSize)
 	label.Font = Enum.Font.Gotham
 	label.TextSize = textSize or 12
 
-	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextXAlignment =
+		Enum.TextXAlignment.Left
 
 	label.Parent = parent
 
 	return label
 end
 
-local function makeButton(parent, text, position, size)
+local function makeButton(
+	parent,
+	text,
+	position,
+	size
+)
+
 	local button = Instance.new("TextButton")
 
 	button.Position = position
@@ -143,7 +174,7 @@ local function makeButton(parent, text, position, size)
 end
 
 --==================================================
--- GUI
+-- ScreenGui
 --==================================================
 
 local gui = Instance.new("ScreenGui")
@@ -161,14 +192,28 @@ gui.Parent = playerGui
 
 local main = Instance.new("Frame")
 
-main.Size = UDim2.fromOffset(300, 595)
+main.Name = "Main"
 
-main.Position = UDim2.new(
-	1,
-	-320,
-	0.5,
-	-297
-)
+main.Size =
+	UDim2.fromOffset(
+		300,
+		595
+	)
+
+-- 오른쪽 가운데 기준
+main.AnchorPoint =
+	Vector2.new(
+		1,
+		0.5
+	)
+
+main.Position =
+	UDim2.new(
+		1,
+		-18,
+		0.5,
+		0
+	)
 
 main.BackgroundColor3 = C.Main
 main.BorderSizePixel = 0
@@ -179,17 +224,122 @@ round(main, 12)
 addStroke(main)
 
 --==================================================
+-- RESPONSIVE SCALE
+--==================================================
+
+local uiScale = Instance.new("UIScale")
+
+uiScale.Name = "ResponsiveScale"
+uiScale.Scale = 1
+
+uiScale.Parent = main
+
+local function updateResponsiveScale()
+
+	local camera =
+		workspace.CurrentCamera
+
+	if not camera then
+		return
+	end
+
+	local viewport =
+		camera.ViewportSize
+
+	if viewport.X <= 0
+		or viewport.Y <= 0
+	then
+		return
+	end
+
+	-- 가로 비율
+	local widthScale =
+		viewport.X
+		/
+		REFERENCE_WIDTH
+
+	-- 세로 비율
+	local heightScale =
+		viewport.Y
+		/
+		REFERENCE_HEIGHT
+
+	-- 둘 중 더 작은 값 사용
+	local targetScale =
+		math.min(
+			widthScale,
+			heightScale
+		)
+
+	targetScale =
+		math.clamp(
+			targetScale,
+			MIN_UI_SCALE,
+			MAX_UI_SCALE
+		)
+
+	uiScale.Scale =
+		targetScale
+end
+
+--==================================================
+-- 카메라 Viewport 크기 감지
+-- 창 크기 변경 / 화면 분할 대응
+--==================================================
+
+local viewportConnection
+
+local function connectViewport()
+
+	if viewportConnection then
+		viewportConnection:Disconnect()
+		viewportConnection = nil
+	end
+
+	local camera =
+		workspace.CurrentCamera
+
+	if not camera then
+		return
+	end
+
+	viewportConnection =
+		camera:GetPropertyChangedSignal(
+			"ViewportSize"
+		):Connect(function()
+
+			updateResponsiveScale()
+
+		end)
+
+	updateResponsiveScale()
+end
+
+workspace:GetPropertyChangedSignal(
+	"CurrentCamera"
+):Connect(function()
+
+	task.defer(
+		connectViewport
+	)
+
+end)
+
+connectViewport()
+
+--==================================================
 -- HEADER
 --==================================================
 
 local header = Instance.new("TextButton")
 
-header.Size = UDim2.new(
-	1,
-	0,
-	0,
-	46
-)
+header.Size =
+	UDim2.new(
+		1,
+		0,
+		0,
+		46
+	)
 
 header.BackgroundColor3 = C.Header
 header.BorderSizePixel = 0
@@ -209,21 +359,25 @@ round(header, 12)
 
 local headerFix = Instance.new("Frame")
 
-headerFix.Size = UDim2.new(
-	1,
-	0,
-	0,
-	12
-)
+headerFix.Size =
+	UDim2.new(
+		1,
+		0,
+		0,
+		12
+	)
 
-headerFix.Position = UDim2.new(
-	0,
-	0,
-	1,
-	-12
-)
+headerFix.Position =
+	UDim2.new(
+		0,
+		0,
+		1,
+		-12
+	)
 
-headerFix.BackgroundColor3 = C.Header
+headerFix.BackgroundColor3 =
+	C.Header
+
 headerFix.BorderSizePixel = 0
 
 headerFix.Parent = header
@@ -232,32 +386,57 @@ headerFix.Parent = header
 -- UI TOGGLE KEY
 --==================================================
 
-local uiKeyButton = makeButton(
-	main,
-	"UI : RightShift",
-	UDim2.new(1, -132, 0, 9),
-	UDim2.fromOffset(118, 28)
-)
+local uiKeyButton =
+	makeButton(
+		main,
+		"UI : RightShift",
+
+		UDim2.new(
+			1,
+			-132,
+			0,
+			9
+		),
+
+		UDim2.fromOffset(
+			118,
+			28
+		)
+	)
 
 uiKeyButton.TextSize = 10
 
 local function updateUIKeyButton()
+
 	if waitingForUIToggleKey then
-		uiKeyButton.Text = "PRESS KEY..."
-		uiKeyButton.TextColor3 = C.Blue
+
+		uiKeyButton.Text =
+			"PRESS KEY..."
+
+		uiKeyButton.TextColor3 =
+			C.Blue
+
 	else
-		uiKeyButton.Text = "UI : " .. uiToggleKey.Name
-		uiKeyButton.TextColor3 = C.Text
+
+		uiKeyButton.Text =
+			"UI : "
+			.. uiToggleKey.Name
+
+		uiKeyButton.TextColor3 =
+			C.Text
 	end
 end
 
 uiKeyButton.MouseButton1Click:Connect(function()
+
 	if waitingForFlyToggleKey then
 		return
 	end
 
 	waitingForUIToggleKey = true
+
 	updateUIKeyButton()
+
 end)
 
 updateUIKeyButton()
@@ -271,43 +450,66 @@ local dragStart
 local startPosition
 
 header.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch
+
+	if input.UserInputType
+			== Enum.UserInputType.MouseButton1
+		or input.UserInputType
+			== Enum.UserInputType.Touch
 	then
+
 		dragging = true
-		dragStart = UserInputService:GetMouseLocation()
-		startPosition = main.Position
+
+		dragStart =
+			UserInputService:GetMouseLocation()
+
+		startPosition =
+			main.Position
 	end
+
 end)
 
 UserInputService.InputChanged:Connect(function(input)
+
 	if not dragging then
 		return
 	end
 
-	if input.UserInputType ~= Enum.UserInputType.MouseMovement
-		and input.UserInputType ~= Enum.UserInputType.Touch
+	if input.UserInputType
+			~= Enum.UserInputType.MouseMovement
+		and input.UserInputType
+			~= Enum.UserInputType.Touch
 	then
 		return
 	end
 
-	local current = UserInputService:GetMouseLocation()
-	local delta = current - dragStart
+	local current =
+		UserInputService:GetMouseLocation()
 
-	main.Position = UDim2.new(
-		startPosition.X.Scale,
-		startPosition.X.Offset + delta.X,
-		startPosition.Y.Scale,
-		startPosition.Y.Offset + delta.Y
-	)
+	local delta =
+		current - dragStart
+
+	main.Position =
+		UDim2.new(
+			startPosition.X.Scale,
+			startPosition.X.Offset + delta.X,
+
+			startPosition.Y.Scale,
+			startPosition.Y.Offset + delta.Y
+		)
+
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch
+
+	if input.UserInputType
+			== Enum.UserInputType.MouseButton1
+		or input.UserInputType
+			== Enum.UserInputType.Touch
 	then
+
 		dragging = false
 	end
+
 end)
 
 --==================================================
@@ -326,86 +528,137 @@ local function createSlider(
 	callback
 )
 
-	local slider = Instance.new("Frame")
+	local slider =
+		Instance.new("Frame")
 
-	slider.Position = position
-	slider.Size = UDim2.fromOffset(width, 6)
+	slider.Position =
+		position
 
-	slider.BackgroundColor3 = C.Slider
-	slider.BorderSizePixel = 0
+	slider.Size =
+		UDim2.fromOffset(
+			width,
+			6
+		)
 
-	slider.Parent = parent
+	slider.BackgroundColor3 =
+		C.Slider
 
-	round(slider, 10)
-
-	local ratio = math.clamp(
-		(initialValue - minValue) / (maxValue - minValue),
-		0,
-		1
-	)
-
-	local fill = Instance.new("Frame")
-
-	fill.Size = UDim2.new(
-		ratio,
-		0,
-		1,
+	slider.BorderSizePixel =
 		0
+
+	slider.Parent =
+		parent
+
+	round(
+		slider,
+		10
 	)
 
-	fill.BackgroundColor3 = C.Blue
-	fill.BorderSizePixel = 0
-
-	fill.Parent = slider
-
-	round(fill, 10)
-
-	local knob = Instance.new("TextButton")
-
-	knob.Size = UDim2.fromOffset(14, 14)
-
-	knob.Position = UDim2.new(
-		ratio,
-		-7,
-		0.5,
-		-7
-	)
-
-	knob.BackgroundColor3 = C.White
-	knob.BorderSizePixel = 0
-
-	knob.Text = ""
-	knob.AutoButtonColor = false
-
-	knob.Parent = slider
-
-	round(knob, 10)
-
-	local function update(x)
-		if slider.AbsoluteSize.X <= 0 then
-			return
-		end
-
-		local ratioValue = math.clamp(
-			(x - slider.AbsolutePosition.X)
-				/ slider.AbsoluteSize.X,
+	local ratio =
+		math.clamp(
+			(initialValue - minValue)
+				/
+				(maxValue - minValue),
 			0,
 			1
 		)
 
-		fill.Size = UDim2.new(
-			ratioValue,
+	local fill =
+		Instance.new("Frame")
+
+	fill.Size =
+		UDim2.new(
+			ratio,
 			0,
 			1,
 			0
 		)
 
-		knob.Position = UDim2.new(
-			ratioValue,
+	fill.BackgroundColor3 =
+		C.Blue
+
+	fill.BorderSizePixel =
+		0
+
+	fill.Parent =
+		slider
+
+	round(
+		fill,
+		10
+	)
+
+	local knob =
+		Instance.new("TextButton")
+
+	knob.Size =
+		UDim2.fromOffset(
+			14,
+			14
+		)
+
+	knob.Position =
+		UDim2.new(
+			ratio,
 			-7,
 			0.5,
 			-7
 		)
+
+	knob.BackgroundColor3 =
+		C.White
+
+	knob.BorderSizePixel =
+		0
+
+	knob.Text =
+		""
+
+	knob.AutoButtonColor =
+		false
+
+	knob.Parent =
+		slider
+
+	round(
+		knob,
+		10
+	)
+
+	local function update(x)
+
+		if slider.AbsoluteSize.X <= 0 then
+			return
+		end
+
+		local ratioValue =
+			math.clamp(
+				(
+					x
+					-
+					slider.AbsolutePosition.X
+				)
+				/
+				slider.AbsoluteSize.X,
+				0,
+				1
+			)
+
+		fill.Size =
+			UDim2.new(
+				ratioValue,
+				0,
+				1,
+				0
+			)
+
+		knob.Position =
+			UDim2.new(
+				ratioValue,
+				-7,
+				0.5,
+				-7
+			)
 
 		local value =
 			minValue
@@ -413,102 +666,205 @@ local function createSlider(
 			(maxValue - minValue)
 			* ratioValue
 
-		callback(value)
+		callback(
+			value
+		)
+
 	end
 
-	local function start(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch
+	local function begin(input)
+
+		if input.UserInputType
+				== Enum.UserInputType.MouseButton1
+			or input.UserInputType
+				== Enum.UserInputType.Touch
 		then
-			activeSlider = update
-			update(input.Position.X)
+
+			activeSlider =
+				update
+
+			update(
+				input.Position.X
+			)
 		end
+
 	end
 
-	knob.InputBegan:Connect(start)
-	slider.InputBegan:Connect(start)
+	knob.InputBegan:Connect(
+		begin
+	)
+
+	slider.InputBegan:Connect(
+		begin
+	)
 
 	return slider
+
 end
 
 UserInputService.InputChanged:Connect(function(input)
+
 	if not activeSlider then
 		return
 	end
 
-	if input.UserInputType == Enum.UserInputType.MouseMovement
-		or input.UserInputType == Enum.UserInputType.Touch
+	if input.UserInputType
+			== Enum.UserInputType.MouseMovement
+		or input.UserInputType
+			== Enum.UserInputType.Touch
 	then
-		activeSlider(input.Position.X)
+
+		activeSlider(
+			input.Position.X
+		)
+
 	end
+
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch
+
+	if input.UserInputType
+			== Enum.UserInputType.MouseButton1
+		or input.UserInputType
+			== Enum.UserInputType.Touch
 	then
-		activeSlider = nil
+
+		activeSlider =
+			nil
+
 	end
+
 end)
 
 --==================================================
--- MACRO UI
+-- MACRO TITLE
 --==================================================
 
-local macroTitle = makeLabel(
-	main,
-	"SKILL MACRO",
-	UDim2.fromOffset(14, 58),
-	UDim2.fromOffset(270, 18),
-	11
+local macroTitle =
+	makeLabel(
+		main,
+		"SKILL MACRO",
+
+		UDim2.fromOffset(
+			14,
+			58
+		),
+
+		UDim2.fromOffset(
+			270,
+			18
+		),
+
+		11
+	)
+
+macroTitle.Font =
+	Enum.Font.GothamBold
+
+macroTitle.TextColor3 =
+	C.Text
+
+--==================================================
+-- MACRO CARD
+--==================================================
+
+local macroCard =
+	Instance.new("Frame")
+
+macroCard.Size =
+	UDim2.fromOffset(
+		272,
+		330
+	)
+
+macroCard.Position =
+	UDim2.fromOffset(
+		14,
+		80
+	)
+
+macroCard.BackgroundColor3 =
+	C.Card
+
+macroCard.BorderSizePixel =
+	0
+
+macroCard.Parent =
+	main
+
+round(
+	macroCard,
+	10
 )
 
-macroTitle.Font = Enum.Font.GothamBold
-macroTitle.TextColor3 = C.Text
+addStroke(
+	macroCard
+)
 
-local macroCard = Instance.new("Frame")
-
-macroCard.Size = UDim2.fromOffset(272, 330)
-macroCard.Position = UDim2.fromOffset(14, 80)
-
-macroCard.BackgroundColor3 = C.Card
-macroCard.BorderSizePixel = 0
-
-macroCard.Parent = main
-
-round(macroCard, 10)
-addStroke(macroCard)
+--==================================================
+-- MACRO ROWS
+--==================================================
 
 for index, keyData in ipairs(keys) do
+
 	local y =
 		12
 		+
 		(index - 1)
 		* 44
 
-	local button = makeButton(
-		macroCard,
-		keyData.Name .. "  OFF",
-		UDim2.fromOffset(10, y),
-		UDim2.fromOffset(70, 30)
-	)
+	local button =
+		makeButton(
+			macroCard,
+			keyData.Name
+				.. "  OFF",
 
-	button.TextColor3 = C.Red
+			UDim2.fromOffset(
+				10,
+				y
+			),
 
-	local timeLabel = makeLabel(
-		macroCard,
-		"0.5s",
-		UDim2.fromOffset(88, y),
-		UDim2.fromOffset(42, 30),
-		11
-	)
+			UDim2.fromOffset(
+				70,
+				30
+			)
+		)
+
+	button.TextColor3 =
+		C.Red
+
+	local timeLabel =
+		makeLabel(
+			macroCard,
+			"0.5s",
+
+			UDim2.fromOffset(
+				88,
+				y
+			),
+
+			UDim2.fromOffset(
+				42,
+				30
+			),
+
+			11
+		)
 
 	button.MouseButton1Click:Connect(function()
-		keyData.Enabled = not keyData.Enabled
+
+		keyData.Enabled =
+			not keyData.Enabled
 
 		if keyData.Enabled then
-			button.Text = keyData.Name .. "  ON"
-			button.TextColor3 = C.Green
+
+			button.Text =
+				keyData.Name
+				.. "  ON"
+
+			button.TextColor3 =
+				C.Green
 
 			button.BackgroundColor3 =
 				Color3.fromRGB(
@@ -516,22 +872,39 @@ for index, keyData in ipairs(keys) do
 					65,
 					49
 				)
+
 		else
-			button.Text = keyData.Name .. "  OFF"
-			button.TextColor3 = C.Red
-			button.BackgroundColor3 = C.Button
+
+			button.Text =
+				keyData.Name
+				.. "  OFF"
+
+			button.TextColor3 =
+				C.Red
+
+			button.BackgroundColor3 =
+				C.Button
+
 		end
+
 	end)
 
 	createSlider(
 		macroCard,
-		UDim2.fromOffset(133, y + 12),
+
+		UDim2.fromOffset(
+			133,
+			y + 12
+		),
+
 		126,
+
 		0.1,
 		3,
 		keyData.HoldTime,
 
 		function(value)
+
 			value =
 				math.floor(
 					value * 10
@@ -539,88 +912,165 @@ for index, keyData in ipairs(keys) do
 				)
 				/ 10
 
-			keyData.HoldTime = value
+			keyData.HoldTime =
+				value
 
 			timeLabel.Text =
 				string.format(
 					"%.1fs",
 					value
 				)
+
 		end
 	)
+
 end
 
 --==================================================
--- FLY UI
+-- FLY TITLE
 --==================================================
 
-local flyTitle = makeLabel(
-	main,
-	"FLY",
-	UDim2.fromOffset(14, 424),
-	UDim2.fromOffset(270, 18),
-	11
+local flyTitle =
+	makeLabel(
+		main,
+		"FLY",
+
+		UDim2.fromOffset(
+			14,
+			424
+		),
+
+		UDim2.fromOffset(
+			270,
+			18
+		),
+
+		11
+	)
+
+flyTitle.Font =
+	Enum.Font.GothamBold
+
+flyTitle.TextColor3 =
+	C.Text
+
+--==================================================
+-- FLY CARD
+--==================================================
+
+local flyCard =
+	Instance.new("Frame")
+
+flyCard.Size =
+	UDim2.fromOffset(
+		272,
+		130
+	)
+
+flyCard.Position =
+	UDim2.fromOffset(
+		14,
+		446
+	)
+
+flyCard.BackgroundColor3 =
+	C.Card
+
+flyCard.BorderSizePixel =
+	0
+
+flyCard.Parent =
+	main
+
+round(
+	flyCard,
+	10
 )
 
-flyTitle.Font = Enum.Font.GothamBold
-flyTitle.TextColor3 = C.Text
-
-local flyCard = Instance.new("Frame")
-
-flyCard.Size = UDim2.fromOffset(272, 130)
-flyCard.Position = UDim2.fromOffset(14, 446)
-
-flyCard.BackgroundColor3 = C.Card
-flyCard.BorderSizePixel = 0
-
-flyCard.Parent = main
-
-round(flyCard, 10)
-addStroke(flyCard)
+addStroke(
+	flyCard
+)
 
 --==================================================
 -- FLY BUTTON
 --==================================================
 
-local flyButton = makeButton(
-	flyCard,
-	"FLY  OFF",
-	UDim2.fromOffset(10, 12),
-	UDim2.fromOffset(110, 34)
-)
+local flyButton =
+	makeButton(
+		flyCard,
+		"FLY  OFF",
 
-flyButton.TextColor3 = C.Red
+		UDim2.fromOffset(
+			10,
+			12
+		),
+
+		UDim2.fromOffset(
+			110,
+			34
+		)
+	)
+
+flyButton.TextColor3 =
+	C.Red
 
 --==================================================
 -- FLY KEY
 --==================================================
 
-local flyKeyButton = makeButton(
-	flyCard,
-	"KEY : Y",
-	UDim2.fromOffset(130, 12),
-	UDim2.fromOffset(132, 34)
-)
+local flyKeyButton =
+	makeButton(
+		flyCard,
+		"KEY : Y",
 
-flyKeyButton.TextSize = 10
+		UDim2.fromOffset(
+			130,
+			12
+		),
+
+		UDim2.fromOffset(
+			132,
+			34
+		)
+	)
+
+flyKeyButton.TextSize =
+	10
 
 local function updateFlyKeyButton()
+
 	if waitingForFlyToggleKey then
-		flyKeyButton.Text = "PRESS KEY..."
-		flyKeyButton.TextColor3 = C.Blue
+
+		flyKeyButton.Text =
+			"PRESS KEY..."
+
+		flyKeyButton.TextColor3 =
+			C.Blue
+
 	else
-		flyKeyButton.Text = "KEY : " .. flyToggleKey.Name
-		flyKeyButton.TextColor3 = C.Text
+
+		flyKeyButton.Text =
+			"KEY : "
+			.. flyToggleKey.Name
+
+		flyKeyButton.TextColor3 =
+			C.Text
+
 	end
+
 end
 
 flyKeyButton.MouseButton1Click:Connect(function()
+
 	if waitingForUIToggleKey then
 		return
 	end
 
-	waitingForFlyToggleKey = true
+	waitingForFlyToggleKey =
+		true
+
 	updateFlyKeyButton()
+
 end)
 
 updateFlyKeyButton()
@@ -629,60 +1079,110 @@ updateFlyKeyButton()
 -- FLY SPEED
 --==================================================
 
-local speedText = makeLabel(
-	flyCard,
-	"FLY SPEED",
-	UDim2.fromOffset(10, 58),
-	UDim2.fromOffset(120, 20),
-	10
-)
+local speedText =
+	makeLabel(
+		flyCard,
+		"FLY SPEED",
 
-speedText.Font = Enum.Font.GothamBold
-speedText.TextColor3 = C.Text
+		UDim2.fromOffset(
+			10,
+			58
+		),
 
-local speedValue = makeLabel(
-	flyCard,
-	tostring(flySpeed),
-	UDim2.fromOffset(200, 58),
-	UDim2.fromOffset(62, 20),
-	11
-)
+		UDim2.fromOffset(
+			120,
+			20
+		),
 
-speedValue.Font = Enum.Font.GothamBold
-speedValue.TextColor3 = C.Blue
-speedValue.TextXAlignment = Enum.TextXAlignment.Right
+		10
+	)
 
+speedText.Font =
+	Enum.Font.GothamBold
+
+speedText.TextColor3 =
+	C.Text
+
+local speedValue =
+	makeLabel(
+		flyCard,
+		tostring(
+			flySpeed
+		),
+
+		UDim2.fromOffset(
+			200,
+			58
+		),
+
+		UDim2.fromOffset(
+			62,
+			20
+		),
+
+		11
+	)
+
+speedValue.Font =
+	Enum.Font.GothamBold
+
+speedValue.TextColor3 =
+	C.Blue
+
+speedValue.TextXAlignment =
+	Enum.TextXAlignment.Right
+
+-- Fly 슬라이더는 딱 하나
 createSlider(
 	flyCard,
-	UDim2.fromOffset(10, 88),
+
+	UDim2.fromOffset(
+		10,
+		88
+	),
+
 	252,
+
 	10,
 	1000,
 	flySpeed,
 
 	function(value)
+
 		flySpeed =
 			math.floor(
-				value + 0.5
+				value
+				+ 0.5
 			)
 
 		speedValue.Text =
 			tostring(
 				flySpeed
 			)
+
 	end
 )
 
-local flyInfo = makeLabel(
-	flyCard,
-	"CAMERA DIR • WASD • SPACE / LCTRL",
-	UDim2.fromOffset(10, 102),
-	UDim2.fromOffset(252, 20),
-	9
-)
+local flyInfo =
+	makeLabel(
+		flyCard,
+		"CAMERA DIR • WASD • SPACE / LCTRL",
+
+		UDim2.fromOffset(
+			10,
+			102
+		),
+
+		UDim2.fromOffset(
+			252,
+			20
+		),
+
+		9
+	)
 
 --==================================================
--- CHARACTER
+-- CHARACTER / FLY PHYSICS
 --==================================================
 
 local character
@@ -693,6 +1193,7 @@ local flyAttachment
 local flyVelocity
 
 local function removeFlyPhysics()
+
 	if flyVelocity then
 		flyVelocity:Destroy()
 		flyVelocity = nil
@@ -702,12 +1203,38 @@ local function removeFlyPhysics()
 		flyAttachment:Destroy()
 		flyAttachment = nil
 	end
+
+	-- 이전 실행에서 남아있을 경우 정리
+	if rootPart then
+
+		local oldVelocity =
+			rootPart:FindFirstChild(
+				"CleanFlyVelocity"
+			)
+
+		if oldVelocity then
+			oldVelocity:Destroy()
+		end
+
+		local oldAttachment =
+			rootPart:FindFirstChild(
+				"CleanFlyAttachment"
+			)
+
+		if oldAttachment then
+			oldAttachment:Destroy()
+		end
+
+	end
+
 end
 
 local function setupCharacter(char)
+
 	removeFlyPhysics()
 
-	character = char
+	character =
+		char
 
 	humanoid =
 		char:WaitForChild(
@@ -719,29 +1246,54 @@ local function setupCharacter(char)
 			"HumanoidRootPart"
 		)
 
-	flyEnabled = false
+	-- 이전 실행 잔여물 제거
+	local oldVelocity =
+		rootPart:FindFirstChild(
+			"CleanFlyVelocity"
+		)
 
-	flyButton.Text = "FLY  OFF"
-	flyButton.TextColor3 = C.Red
-	flyButton.BackgroundColor3 = C.Button
+	if oldVelocity then
+		oldVelocity:Destroy()
+	end
+
+	local oldAttachment =
+		rootPart:FindFirstChild(
+			"CleanFlyAttachment"
+		)
+
+	if oldAttachment then
+		oldAttachment:Destroy()
+	end
+
+	flyEnabled =
+		false
+
+	flyButton.Text =
+		"FLY  OFF"
+
+	flyButton.TextColor3 =
+		C.Red
+
+	flyButton.BackgroundColor3 =
+		C.Button
+
 end
 
 if player.Character then
+
 	task.spawn(
 		setupCharacter,
 		player.Character
 	)
+
 end
 
 player.CharacterAdded:Connect(
 	setupCharacter
 )
 
---==================================================
--- FLY PHYSICS
---==================================================
-
 local function createFlyPhysics()
+
 	if not rootPart then
 		return
 	end
@@ -749,7 +1301,9 @@ local function createFlyPhysics()
 	removeFlyPhysics()
 
 	flyAttachment =
-		Instance.new("Attachment")
+		Instance.new(
+			"Attachment"
+		)
 
 	flyAttachment.Name =
 		"CleanFlyAttachment"
@@ -758,7 +1312,9 @@ local function createFlyPhysics()
 		rootPart
 
 	flyVelocity =
-		Instance.new("LinearVelocity")
+		Instance.new(
+			"LinearVelocity"
+		)
 
 	flyVelocity.Name =
 		"CleanFlyVelocity"
@@ -780,6 +1336,7 @@ local function createFlyPhysics()
 
 	flyVelocity.Parent =
 		rootPart
+
 end
 
 --==================================================
@@ -787,6 +1344,7 @@ end
 --==================================================
 
 local function toggleFly()
+
 	if not rootPart
 		or not rootPart.Parent
 	then
@@ -797,6 +1355,7 @@ local function toggleFly()
 		not flyEnabled
 
 	if flyEnabled then
+
 		createFlyPhysics()
 
 		flyButton.Text =
@@ -813,6 +1372,7 @@ local function toggleFly()
 			)
 
 	else
+
 		removeFlyPhysics()
 
 		flyButton.Text =
@@ -823,7 +1383,9 @@ local function toggleFly()
 
 		flyButton.BackgroundColor3 =
 			C.Button
+
 	end
+
 end
 
 flyButton.MouseButton1Click:Connect(
@@ -831,7 +1393,7 @@ flyButton.MouseButton1Click:Connect(
 )
 
 --==================================================
--- MOVEMENT
+-- MOVEMENT STATE
 --==================================================
 
 local movement = {
@@ -839,6 +1401,7 @@ local movement = {
 	A = false,
 	S = false,
 	D = false,
+
 	Up = false,
 	Down = false
 }
@@ -848,24 +1411,50 @@ local function setMovement(
 	state
 )
 
-	if keyCode == Enum.KeyCode.W then
-		movement.W = state
+	if keyCode
+		== Enum.KeyCode.W
+	then
 
-	elseif keyCode == Enum.KeyCode.S then
-		movement.S = state
+		movement.W =
+			state
 
-	elseif keyCode == Enum.KeyCode.A then
-		movement.A = state
+	elseif keyCode
+		== Enum.KeyCode.S
+	then
 
-	elseif keyCode == Enum.KeyCode.D then
-		movement.D = state
+		movement.S =
+			state
 
-	elseif keyCode == Enum.KeyCode.Space then
-		movement.Up = state
+	elseif keyCode
+		== Enum.KeyCode.A
+	then
 
-	elseif keyCode == Enum.KeyCode.LeftControl then
-		movement.Down = state
+		movement.A =
+			state
+
+	elseif keyCode
+		== Enum.KeyCode.D
+	then
+
+		movement.D =
+			state
+
+	elseif keyCode
+		== Enum.KeyCode.Space
+	then
+
+		movement.Up =
+			state
+
+	elseif keyCode
+		== Enum.KeyCode.LeftControl
+	then
+
+		movement.Down =
+			state
+
 	end
+
 end
 
 --==================================================
@@ -878,27 +1467,32 @@ UserInputService.InputBegan:Connect(function(
 )
 
 	--------------------------------------------------
-	-- UI KEY CHANGE
+	-- UI 키 설정 대기
 	--------------------------------------------------
 
 	if waitingForUIToggleKey then
+
 		if input.UserInputType
 			== Enum.UserInputType.Keyboard
 		then
+
 			if input.KeyCode
 				== Enum.KeyCode.Escape
 			then
+
 				waitingForUIToggleKey =
 					false
 
 				updateUIKeyButton()
 
 				return
+
 			end
 
 			if input.KeyCode
 				~= Enum.KeyCode.Unknown
 			then
+
 				uiToggleKey =
 					input.KeyCode
 
@@ -908,34 +1502,42 @@ UserInputService.InputBegan:Connect(function(
 				updateUIKeyButton()
 
 				return
+
 			end
+
 		end
 
 		return
+
 	end
 
 	--------------------------------------------------
-	-- FLY KEY CHANGE
+	-- Fly 키 설정 대기
 	--------------------------------------------------
 
 	if waitingForFlyToggleKey then
+
 		if input.UserInputType
 			== Enum.UserInputType.Keyboard
 		then
+
 			if input.KeyCode
 				== Enum.KeyCode.Escape
 			then
+
 				waitingForFlyToggleKey =
 					false
 
 				updateFlyKeyButton()
 
 				return
+
 			end
 
 			if input.KeyCode
 				~= Enum.KeyCode.Unknown
 			then
+
 				flyToggleKey =
 					input.KeyCode
 
@@ -945,17 +1547,23 @@ UserInputService.InputBegan:Connect(function(
 				updateFlyKeyButton()
 
 				return
+
 			end
+
 		end
 
 		return
+
 	end
 
 	--------------------------------------------------
 	-- UI TOGGLE
 	--------------------------------------------------
 
-	if input.KeyCode == uiToggleKey then
+	if input.KeyCode
+		== uiToggleKey
+	then
+
 		uiVisible =
 			not uiVisible
 
@@ -963,47 +1571,59 @@ UserInputService.InputBegan:Connect(function(
 			uiVisible
 
 		return
+
 	end
 
 	--------------------------------------------------
 	-- FLY TOGGLE
 	--------------------------------------------------
 
-	if input.KeyCode == flyToggleKey then
+	if input.KeyCode
+		== flyToggleKey
+	then
+
 		toggleFly()
+
 		return
+
 	end
 
 	--------------------------------------------------
-	-- MOVEMENT
+	-- Fly Movement
 	--------------------------------------------------
 
 	if not gameProcessed then
+
 		setMovement(
 			input.KeyCode,
 			true
 		)
+
 	end
+
 end)
 
 UserInputService.InputEnded:Connect(function(input)
+
 	setMovement(
 		input.KeyCode,
 		false
 	)
+
 end)
 
 --==================================================
 -- FLY UPDATE
 --
--- LinearVelocity가 VectorVelocity = 0 을 유지하므로
--- 아무 키도 안 누르면 중력으로 떨어지지 않음.
+-- W = 보는 방향 그대로
+-- 카메라 Y축도 포함
 --
--- W/S는 카메라 LookVector 그대로 사용해서
--- Y축까지 포함.
+-- 정지 상태에서는 LinearVelocity가
+-- Vector3.zero를 유지해서 떨어지지 않음
 --==================================================
 
 RunService.RenderStepped:Connect(function()
+
 	if not flyEnabled then
 		return
 	end
@@ -1019,7 +1639,9 @@ RunService.RenderStepped:Connect(function()
 	if not flyVelocity
 		or not flyVelocity.Parent
 	then
+
 		createFlyPhysics()
+
 	end
 
 	if not flyVelocity then
@@ -1033,6 +1655,7 @@ RunService.RenderStepped:Connect(function()
 		return
 	end
 
+	-- Y축 포함 카메라 방향
 	local forward =
 		camera.CFrame.LookVector
 
@@ -1042,44 +1665,68 @@ RunService.RenderStepped:Connect(function()
 	local direction =
 		Vector3.zero
 
-	-- 카메라가 보는 3D 방향 그대로
+	-- 앞
 	if movement.W then
-		direction += forward
+
+		direction +=
+			forward
+
 	end
 
+	-- 뒤
 	if movement.S then
-		direction -= forward
+
+		direction -=
+			forward
+
 	end
 
-	-- 카메라 기준 좌우
+	-- 오른쪽
 	if movement.D then
-		direction += right
+
+		direction +=
+			right
+
 	end
 
+	-- 왼쪽
 	if movement.A then
-		direction -= right
+
+		direction -=
+			right
+
 	end
 
-	-- 수직 이동
+	-- 수직 위
 	if movement.Up then
-		direction += Vector3.yAxis
+
+		direction +=
+			Vector3.yAxis
+
 	end
 
+	-- 수직 아래
 	if movement.Down then
-		direction -= Vector3.yAxis
+
+		direction -=
+			Vector3.yAxis
+
 	end
 
 	if direction.Magnitude > 0 then
+
 		flyVelocity.VectorVelocity =
 			direction.Unit
 			* flySpeed
+
 	else
-		-- ★ 핵심:
-		-- 아무 키도 안 누르면 속도 0을
-		-- 물리적으로 계속 유지해서 공중 정지
+
+		-- 공중 정지
 		flyVelocity.VectorVelocity =
 			Vector3.zero
+
 	end
+
 end)
 
 --==================================================
@@ -1087,10 +1734,16 @@ end)
 --==================================================
 
 task.spawn(function()
+
 	while true do
-		for _, keyData in ipairs(keys) do
+
+		for _, keyData
+			in ipairs(keys)
+		do
+
 			if keyData.Enabled then
 
+				-- Key Down
 				VirtualInputManager:SendKeyEvent(
 					true,
 					keyData.KeyCode,
@@ -1098,10 +1751,12 @@ task.spawn(function()
 					game
 				)
 
+				-- Hold
 				task.wait(
 					keyData.HoldTime
 				)
 
+				-- Key Up
 				VirtualInputManager:SendKeyEvent(
 					false,
 					keyData.KeyCode,
@@ -1109,10 +1764,18 @@ task.spawn(function()
 					game
 				)
 
-				task.wait(0.06)
+				task.wait(
+					0.06
+				)
+
 			end
+
 		end
 
-		task.wait(0.15)
+		task.wait(
+			0.15
+		)
+
 	end
+
 end)
